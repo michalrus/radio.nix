@@ -3,6 +3,7 @@
   coreutils,
   curl,
   jq,
+  skim,
   mpv,
   mpvScripts,
 }: let
@@ -10,7 +11,7 @@
 in
   writeShellApplication {
     name = "radio-chillhop";
-    runtimeInputs = [coreutils curl jq mpv'];
+    runtimeInputs = [coreutils curl jq skim mpv'];
     text = builtins.readFile ./radio.sh;
     derivationArgs.meta.description = "Plays Chillhop.com live streams in the terminal";
   }
