@@ -1,6 +1,6 @@
 # radio.nix
 
-A Nix flake packaging interactive terminal-based internet radio players. Pick a station from a fuzzy-searchable menu and listen with mpv -- with automatic ad/jingle muting.
+A Nix flake packaging interactive terminal-based internet radio players. Pick a station from a fuzzy-searchable menu and listen with mpv – with automatic ad/jingle muting.
 
 ## Quick start
 
@@ -17,8 +17,8 @@ The main `radio` package reads stations from [`radio/stations.yml`](radio/statio
 ## Features
 
 - **Fuzzy station search** via skim (`sk`).
-- **Automatic ad/jingle muting** -- a custom mpv Lua script watches ICY stream metadata and mutes when it detects ad markers or blank titles. Configured per-station in `stations.yml`.
-- **Resilient playback** -- exponential backoff retry (2 s to 60 s) on stream failure, with automatic reset after sustained playback.
+- **Automatic ad/jingle muting** – a custom mpv Lua script watches ICY stream metadata and mutes when it detects ad markers or blank titles. Configured per-station in `stations.yml`.
+- **Resilient playback** – exponential backoff retry (2 s to 60 s) on stream failure, with automatic reset after sustained playback.
 
 ## Supported systems
 
