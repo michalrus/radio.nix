@@ -34,6 +34,13 @@ get_station_mute_empty_title() {
   yq -r --arg station "$name" '.stations[] | select(.name == $station) | (."mute-empty-title" // false)' "$stations_yaml"
 }
 
+get_station_type() {
+  local name="$1"
+
+  # shellcheck disable=SC2016
+  yq -r --arg station "$name" '.stations[] | select(.name == $station) | (.type // "stream")' "$stations_yaml"
+}
+
 play_stream() {
   local name="$1"
   local url="$2"
@@ -89,6 +96,64 @@ play_stream() {
   done
 }
 
+play_youtube_channel() {
+  local name="$1"
+  local url="$2"
+  local mpv_override="${3:-}"
+
+  if ! command -v yt-dlp &>/dev/null; then
+    echo >&2 'fatal: yt-dlp not found on PATH; install it and try again'
+    exit 1
+  fi
+
+  echo
+  echo "Station: $name"
+  echo
+
+  local retry_delay=2
+  local max_retry_delay=60
+
+  while true; do
+    echo "Fetching video list..."
+
+    local video_ids
+    mapfile -t video_ids < <(yt-dlp --flat-playlist --print id "$url" 2>/dev/null | shuf)
+
+    if [ ${#video_ids[@]} -eq 0 ]; then
+      echo >&2 "No videos found, retrying in ${retry_delay}s..."
+      sleep "$retry_delay"
+      retry_delay=$((retry_delay * 2))
+      if ((retry_delay > max_retry_delay)); then retry_delay=$max_retry_delay; fi
+      continue
+    fi
+
+    retry_delay=2
+    echo "Found ${#video_ids[@]} videos, playing in shuffled order."
+
+    for video_id in "${video_ids[@]}"; do
+      local video_url="https://www.youtube.com/watch?v=${video_id}"
+
+      echo
+      echo "Now playing: $video_url"
+      echo
+
+      local cmd
+      if [ -n "$mpv_override" ] && [ "$mpv_override" != "null" ]; then
+        cmd=("$mpv_override" "$video_url")
+      else
+        cmd=(mpv --no-resume-playback --ytdl-format=bestaudio --user-agent="$user_agent" "$video_url")
+      fi
+
+      local rc=0
+      "${cmd[@]}" || rc=$?
+      if ((rc == 4)); then exit 0; fi
+    done
+
+    echo
+    echo "All videos played. Re-fetching and re-shuffling..."
+  done
+}
+
 mapfile -t stations_from_yaml < <(
   yq -r '.stations | .[] | .name' "$stations_yaml"
 )
@@ -114,14 +179,20 @@ case "$station" in
   ;;
 *)
   url=$(get_station_url "$station")
+  station_type=$(get_station_type "$station")
   mpv_override=$(get_station_mpv_override "$station")
-  infixes=$(get_station_infixes "$station")
-  mute_empty_title=$(get_station_mute_empty_title "$station")
+
   if [ -z "$url" ]; then
     echo "No URL found for station: $station" >&2
     exit 1
   fi
 
-  play_stream "$station" "$url" "$infixes" "$mute_empty_title" "$mpv_override"
+  if [ "$station_type" = "youtube-channel" ]; then
+    play_youtube_channel "$station" "$url" "$mpv_override"
+  else
+    infixes=$(get_station_infixes "$station")
+    mute_empty_title=$(get_station_mute_empty_title "$station")
+    play_stream "$station" "$url" "$infixes" "$mute_empty_title" "$mpv_override"
+  fi
   ;;
 esac
