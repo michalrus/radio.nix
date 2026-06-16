@@ -16,10 +16,11 @@
         default = radio;
         accuradio = callPackage ./accuradio {};
         radio = callPackage ./radio {
-          inherit accuradio radio-chillhop radio-jazzradio-fr;
+          inherit accuradio radio-chillhop radio-jazzradio-fr radio-zenradio;
         };
         radio-chillhop = callPackage ./radio-chillhop {};
         radio-jazzradio-fr = callPackage ./radio-jazzradio-fr {};
+        radio-zenradio = callPackage ./radio-zenradio {};
       });
   };
 }
