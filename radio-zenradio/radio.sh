@@ -65,45 +65,53 @@ echo "Channel: $channel_name"
 # A "routine" is a server-curated playlist of individual track files for the
 # channel. Play it track by track, fetching the next batch when it runs out.
 # The first request uses `tune_in=true` to start fresh; later ones advance.
+#
+# ZenRadio runs on AudioAddict, whose free/guest tier caps listening per IP.
+# Once the cap is hit the routine still lists tracks but withholds the audio
+# (`content` comes back empty), so nothing is playable. The guest `audio_token`
+# is static, so we can't refresh our way out of it; after a few fruitless
+# attempts we report the limit and stop instead of spinning forever.
+max_empty=3
+empty_count=0
 tune_in=true
 while true; do
   routine_json=$(curl -A "$user_agent" -fsSL \
     "$api_root/routines/channel/${channel_id}?audio_token=${audio_token}&tune_in=${tune_in}" || true)
 
-  track_count=0
+  track_list=""
   if [ -n "$routine_json" ]; then
-    track_count=$(printf '%s' "$routine_json" | jq -r '(.tracks // []) | length' 2>/dev/null || echo 0)
+    track_list=$(printf '%s' "$routine_json" | jq -r '
+      .tracks[]
+      | select((.content.assets // []) | length > 0)
+      | select(.content.assets[0].url != null)
+      | [ ("https:" + .content.assets[0].url),
+          (.display_title // .title // ""),
+          (.display_artist // .artist.name // ""),
+          (.release.title // "") ]
+      | @tsv' 2>/dev/null || true)
   fi
 
-  # An empty/invalid routine usually means the guest audio_token expired;
-  # refresh it from the homepage and start over.
-  if [ "$track_count" = "0" ]; then
-    echo >&2 'warning: empty routine from ZenRadio, refreshing audio_token...'
-    if state=$(fetch_state); then
-      audio_token=$(printf '%s' "$state" | jq -r '.user.audio_token // empty')
+  if [ -z "$track_list" ]; then
+    empty_count=$((empty_count + 1))
+    if [ "$empty_count" -gt "$max_empty" ]; then
+      echo >&2
+      echo >&2 'ZenRadio returned no playable audio.'
+      echo >&2
+      echo >&2 'This usually means the free (guest) listening limit for your IP has been'
+      echo >&2 'reached: ZenRadio (AudioAddict) withholds the audio once the cap is hit, so'
+      echo >&2 'the track list still loads but every "content" is empty. It typically resets'
+      echo >&2 'after a while, so try again later. (Removing the cap would require a paid'
+      echo >&2 'ZenRadio Premium account.)'
+      exit 1
     fi
+    echo >&2 "warning: no playable tracks from ZenRadio (attempt ${empty_count}/${max_empty}); retrying..."
     sleep 2
     tune_in=true
     continue
   fi
 
+  empty_count=0
   tune_in=false
-
-  track_list=$(printf '%s' "$routine_json" | jq -r '
-    .tracks[]
-    | select((.content.assets // []) | length > 0)
-    | select(.content.assets[0].url != null)
-    | [ ("https:" + .content.assets[0].url),
-        (.display_title // .title // ""),
-        (.display_artist // .artist.name // ""),
-        (.release.title // "") ]
-    | @tsv')
-
-  if [ -z "$track_list" ]; then
-    echo >&2 'warning: no playable tracks in routine'
-    sleep 2
-    continue
-  fi
 
   while IFS=$'\t' read -r track_url title artist album; do
     if [ -z "$track_url" ]; then
