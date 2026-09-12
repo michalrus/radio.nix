@@ -69,7 +69,9 @@ stations:
     url: https://somafm.com/defcon256.pls
 
   - name: "Muzak: Utopian Scholastic · 1990s Nostalgic Atmospheres"
-    url: https://www.youtube.com/watch?v=6QOUNvMX-ws
+    url:
+      - https://www.youtube.com/watch?v=6QOUNvMX-ws
+      - https://www.youtube.com/watch?v=d7XdtzDEEPk
     mpv-override: mpva-android
 
   - name: "Soul: WHUR · The Quiet Storm"

@@ -6,11 +6,11 @@ user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 mpv_mute_script='@mpvMuteScript@'
 stations_yaml='@stationsYaml@'
 
-get_station_url() {
+get_station_urls() {
   local name="$1"
 
   # shellcheck disable=SC2016
-  yq -r --arg station "$name" '.stations[] | select(.name == $station) | .url' "$stations_yaml"
+  yq -r --arg station "$name" '.stations[] | select(.name == $station) | .url | if type == "array" then .[] else . end' "$stations_yaml"
 }
 
 get_station_mpv_override() {
@@ -43,10 +43,11 @@ get_station_type() {
 
 play_stream() {
   local name="$1"
-  local url="$2"
-  local infixes="${3:-}"
-  local mute_empty_title="${4:-false}"
-  local mpv_override="${5:-}"
+  local infixes="${2:-}"
+  local mute_empty_title="${3:-false}"
+  local mpv_override="${4:-}"
+  shift 4
+  local urls=("$@")
   local mpv_args=(
     --user-agent="$user_agent"
     --no-ytdl
@@ -65,14 +66,14 @@ play_stream() {
 
   echo
   echo "Station: $name"
-  echo "URL:     $url"
+  printf 'URL:     %s\n' "${urls[@]}"
   echo
 
   local cmd
   if [ -n "$mpv_override" ] && [ "$mpv_override" != "null" ]; then
-    cmd=("$mpv_override" --loop-playlist=inf "$url")
+    cmd=("$mpv_override" --loop-playlist=inf "${urls[@]}")
   else
-    cmd=(mpv "${mpv_args[@]}" "$url")
+    cmd=(mpv "${mpv_args[@]}" "${urls[@]}")
   fi
 
   local retry_delay=2
@@ -181,21 +182,21 @@ case "$station" in
   exec radio-zenradio
   ;;
 *)
-  url=$(get_station_url "$station")
+  mapfile -t urls < <(get_station_urls "$station")
   station_type=$(get_station_type "$station")
   mpv_override=$(get_station_mpv_override "$station")
 
-  if [ -z "$url" ]; then
+  if [ ${#urls[@]} -eq 0 ]; then
     echo "No URL found for station: $station" >&2
     exit 1
   fi
 
   if [ "$station_type" = "youtube-channel" ]; then
-    play_youtube_channel "$station" "$url" "$mpv_override"
+    play_youtube_channel "$station" "${urls[0]}" "$mpv_override"
   else
     infixes=$(get_station_infixes "$station")
     mute_empty_title=$(get_station_mute_empty_title "$station")
-    play_stream "$station" "$url" "$infixes" "$mute_empty_title" "$mpv_override"
+    play_stream "$station" "$infixes" "$mute_empty_title" "$mpv_override" "${urls[@]}"
   fi
   ;;
 esac
